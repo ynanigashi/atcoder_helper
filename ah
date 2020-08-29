@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+import sys
+import os
+import requests
+from bs4 import BeautifulSoup
+import re
+
+class ArgException(Exception):
+    pass
+
+
+#テスト機能（test）ah a <ファイル名>
+#Python
+
+#CPP
+#
+def save_sample(contest, task):
+    url_name = "https://atcoder.jp/contests/" + contest + "/tasks/" + contest + "_" + task
+    res = requests.get(url_name)
+    soup = BeautifulSoup(res.content, "html.parser")
+    elm = soup.select("span.lang-ja div.part pre")
+    n = (len(elm) - 1) // 2
+    for i in range(n):
+        t_in = elm[i*2+1].text
+        t_out = elm[i*2+2].text
+        num = i + 1
+        #A_1_in.txt
+        #A_1_out.txt
+        with open(f"{task.upper()}_{num}_in.txt", "w") as f:
+            f.write(t_in)
+        with open(f"{task.upper()}_{num}_out.txt", "w") as f:
+            f.write(t_out)
+
+def initialize():
+    #初期化機能(init) ah init abcXXX
+    #ディレクトリを名前で作成
+    contest = sys.argv[2].lower()
+    dir_path = "./" + contest.upper()
+    try:
+       os.mkdir(dir_path)
+    except Exception as e:
+        print(e)
+        exit()
+    os.chdir(dir_path)
+    #ディレクトリ内に設定ファイルを作成
+    #コンテスト名が記載されている
+    with open("ah.conf", "w") as f:
+        f.write(contest)
+    sample_dir = "samples"
+    os.mkdir(sample_dir)
+    os.chdir(sample_dir)
+
+    #サンプルを読み込んでファイルを作成
+    tasks = "abcdef"
+    for task in tasks:
+        save_sample(contest, task)
+    #ディレクトリに入ってから実行してねと言う
+
+def run_test():
+    pass
+
+def main():
+    try:
+        if len(sys.argv) != 3:
+            print(1)
+            raise ArgException
+        op = sys.argv[1]
+        if op == "init":
+            initialize()
+        elif op in list("abcdef"):
+            run_test()
+        else:
+            raise ArgException
+
+    except ArgException:
+        print("usage:")
+        print("    ah init abcXXX")
+        print("    ah a <<file name>>")
+        exit()
+
+main()
