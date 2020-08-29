@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 import sys
 import os
+import json
 import requests
 from bs4 import BeautifulSoup
 import re
+import glob
+import subprocess
+
+config_file = "ah.json"
 
 class ArgException(Exception):
     pass
@@ -35,6 +40,12 @@ def initialize():
     #初期化機能(init) ah init abcXXX
     #ディレクトリを名前で作成
     contest = sys.argv[2].lower()
+    compiler = "/usr/local/bin/g++"
+    settings = {
+        "contest" : contest,
+        "compiler" : compiler
+    }
+
     dir_path = "./" + contest.upper()
     try:
        os.mkdir(dir_path)
@@ -44,8 +55,8 @@ def initialize():
     os.chdir(dir_path)
     #ディレクトリ内に設定ファイルを作成
     #コンテスト名が記載されている
-    with open("ah.conf", "w") as f:
-        f.write(contest)
+    with open(config_file, "w") as f:
+        json.dump(settings, f)
     sample_dir = "samples"
     os.mkdir(sample_dir)
     os.chdir(sample_dir)
@@ -55,14 +66,46 @@ def initialize():
     for task in tasks:
         save_sample(contest, task)
     #ディレクトリに入ってから実行してねと言う
+    print(contest.upper() + "フォルダに移動して作業してね")
 
+#作成されたディレクトリに移動して実行
 def run_test():
-    pass
+    #設定の読み込み
+    try:
+        with open(config_file, "r") as f:
+            settings = json.load(f)
+    except Exception as e:
+        print(e)
+        print("作業フォルダに移動してください")
+        exit()
+    #ファイル名を取得して、拡張子を取得
+    task = sys.argv[1].upper()
+    source_file = sys.argv[2]
+    extensions = source_file[source_file.rfind('.') + 1 :].lower()
+    sample_files = glob.glob('samples/{}_*.txt'.format(task))
+    sample_pairs = []
+    for i in range(1, len(sample_files)//2 + 1):
+        input_file = 'samples/{}_{}_in.txt'.format(task, i)
+        output_file = 'samples/{}_{}_out.txt'.format(task, i)
+        if input_file in sample_files and output_file in sample_files:
+            sample_pairs.append((i, input_file, output_file))
+
+    if extensions == "py":
+        command = ["python3", source_file]
+        for i, input_file, output_file in sample_pairs:
+            with open(input_file, "r") as f:
+                result = subprocess.run(command, stdin=f, check=True, capture_output=True, text=True)
+            with open(output_file, "r") as f:
+                if f.read() == result.stdout:
+                    print("{}-{}: AC".format(task, i))
+                else:
+                    print("{}-{}: WA".format(task, i))
+    elif extensions == "cpp":
+        pass
 
 def main():
     try:
         if len(sys.argv) != 3:
-            print(1)
             raise ArgException
         op = sys.argv[1]
         if op == "init":
