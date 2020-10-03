@@ -7,27 +7,54 @@ from bs4 import BeautifulSoup
 import re
 import glob
 import subprocess
+import getpass
+import urllib.parse
 
 config_file = "ah.json"
 
 class ArgException(Exception):
     pass
 
+class ElementException(Exception):
+    pass
 
-#テスト機能（test）ah a <ファイル名>
-#Python
+class LoginException(Exception):
+    pass
 
-#CPP
-#
-def save_sample(contest, task):
+def get_login_session(username, password):
+    s = requests.Session()
+
+    r = s.get('https://atcoder.jp/login')
+    soup = BeautifulSoup(r.content, 'html.parser')
+    csrf_token = soup.select_one('input[name="csrf_token"]')['value']
+    data = dict(csrf_token=csrf_token,username=username, password=password)
+
+    headers = {
+    'authority': 'atcoder.jp',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36',
+    }
+
+    ret = s.post('https://atcoder.jp/login', data=data, headers=headers, allow_redirects=False)
+
+    #ログインの正否を確認
+    revel = ret.cookies.get('REVEL_FLASH')
+    if revel and urllib.parse.unquote(revel, 'utf-8')[1:-1].split(":")[0] == 'success':
+        return s
+    else:
+        raise LoginException("ログインに失敗しています。")
+
+def save_sample(session, contest, task):
     url_name = "https://atcoder.jp/contests/" + contest + "/tasks/" + contest + "_" + task
-    res = requests.get(url_name)
+    res = session.get(url_name)
     soup = BeautifulSoup(res.content, "html.parser")
     elm = soup.select("span.lang-ja div.part pre")
+    if len(elm) == 0: raise ElementException("要素が取得できませんでした。")
     n = (len(elm) - 1) // 2
     for i in range(n):
         t_in = elm[i*2+1].text
         t_out = elm[i*2+2].text
+        if (not t_in) or (not t_out): continue
         num = i + 1
         #A_1_in.txt
         #A_1_out.txt
@@ -45,26 +72,33 @@ def initialize():
         "contest" : contest,
         "compiler" : compiler
     }
-
-    dir_path = "./" + contest.upper()
+    prefix = "contest-"
+    dir_path = "./" + prefix + contest.upper()
     try:
-       os.mkdir(dir_path)
+        print("AtCoderにログインします")
+        username=input('username? ')
+        password=getpass.getpass('password? ')
+        session = get_login_session(username, password)
+
+        #コンテスト名のディレクトリを作成する
+        os.mkdir(dir_path)
+        os.chdir(dir_path)
+        #ディレクトリ内に設定ファイルを作成
+        with open(config_file, "w") as f:
+            json.dump(settings, f)
+        sample_dir = "samples"
+        os.mkdir(sample_dir)
+        os.chdir(sample_dir)
+
+        #サンプルを読み込んでファイルを作成
+        tasks = "abcdef"
+        for task in tasks:
+            save_sample(session, contest, task)
     except Exception as e:
+        print("☠️ エラーが発生しました ☠️")
         print(e)
         exit()
-    os.chdir(dir_path)
-    #ディレクトリ内に設定ファイルを作成
-    #コンテスト名が記載されている
-    with open(config_file, "w") as f:
-        json.dump(settings, f)
-    sample_dir = "samples"
-    os.mkdir(sample_dir)
-    os.chdir(sample_dir)
 
-    #サンプルを読み込んでファイルを作成
-    tasks = "abcdef"
-    for task in tasks:
-        save_sample(contest, task)
     #ディレクトリに入ってから実行してねと言う
     print(contest.upper() + "フォルダに移動して作業してね")
 
@@ -118,7 +152,9 @@ def main():
 
     except ArgException:
         print("usage:")
+        print(" initialize")
         print("    ah init abcXXX")
+        print(" test")
         print("    ah a <<file name>>")
         exit()
 
